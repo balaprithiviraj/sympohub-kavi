@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+build/
+
+# Env & secrets (use .env.example templates)
+.env
+*.local
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Vite / editor
+.vite/
+.vscode/
+.idea/

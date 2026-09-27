@@ -1,0 +1,554 @@
+================================================================================
+ SympoHub - Complete Project Documentation
+ Discover Your Next College Event
+ Version 1.0.0 | Year 2026
+================================================================================
+
+1. PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+SympoHub is a full-stack web platform that centralizes college events in one
+place. Students can discover symposiums, workshops, hackathons, paper
+presentations, project expos, cultural fests and sports meets, register in
+seconds, track My Events, manage their profile, and collect participation
+certificates.
+
+Tagline: "Discover Your Next College Event. Symposiums, workshops,
+hackathons and more."
+
+Key Value Propositions:
+  - Single hub for events from multiple colleges (Anna University, PSG Tech,
+    SSN, VIT Chennai, SRM Institute, NIT Trichy, Loyola College, etc.)
+  - Fast search + category / college / date / type filters + sorting
+  - One-click registration with seat tracking and duplicate protection
+  - My Events dashboard with Registered / Upcoming / Completed status
+  - Auto-generated Participation certificates for completed events
+  - Secure JWT authentication with persistent login
+  - Modern responsive UI with glassmorphism, animations, skeletons
+
+Project Structure:
+  sympohub/
+    backend/
+      src/
+        server.js              - Express app entry, CORS, routes, auto-seed
+        config/db.js           - MongoDB connection (local / Atlas / memory)
+        models/
+          Event.js             - Event schema + CATEGORIES
+          Student.js           - Student/user schema
+          Registration.js      - Student <-> Event registration
+          Certificate.js       - Participation certificates
+        routes/
+          students.js          - Register, Login, Get, Update profile
+          events.js            - List, Search, Category, Single, Register alias
+          registrations.js     - Create, List by student, Get, Cancel
+          certificates.js      - List by student with auto-generation
+        middleware/
+          auth.js              - JWT Bearer verification
+          errorHandler.js      - Central JSON error handler
+        seed/seed.js           - 14 sample events + sample student
+      package.json
+      .env / .env.example
+    frontend/
+      index.html               - Title, meta, Google Fonts (Inter + Plus Jakarta)
+      vite.config.js           - Vite + React, port 5173
+      tailwind.config.js       - Brand theme, shadows, animations
+      postcss.config.js
+      src/
+        main.jsx               - ReactDOM entry
+        App.jsx                - Router + AuthProvider + Navbar/Footer + pages
+        index.css              - Tailwind + glass, btn, card, chip, skeleton
+        context/AuthContext.jsx- Auth state, login/register/logout/update
+        lib/api.js             - Axios instance + auth/events/registrations/certs APIs
+        components/
+          Navbar.jsx, Footer.jsx, EventCard.jsx, CategoryCard.jsx,
+          SearchBar.jsx, FilterPanel.jsx, Button.jsx, Modal.jsx,
+          LoadingSkeleton.jsx, EmptyState.jsx
+        pages/
+          Home.jsx, ExploreEvents.jsx, EventDetails.jsx,
+          MyEvents.jsx, Profile.jsx, Login.jsx, Register.jsx
+      package.json
+      .env / .env.example
+    backend.log
+    sympohub_document.txt (this file)
+
+
+2. TECH STACK
+--------------------------------------------------------------------------------
+Frontend:
+  - React 18.2.0 + React DOM 18.2.0
+  - React Router DOM 6.22.1 (client routing, redirects, 404 page)
+  - Vite 5.1.4 + @vitejs/plugin-react 4.2.1 (dev server, build)
+  - Tailwind CSS 3.4.1 + PostCSS 8.4.35 + Autoprefixer 10.4.18
+  - Axios 1.6.7 (API calls, interceptors for token + 401 cleanup)
+  - Framer Motion 11.0.8 (page transitions, cards, modals, navbar)
+  - Lucide React 0.344.0 (icons: GraduationCap, CalendarDays, Users, etc.)
+  - Fonts: Inter + Plus Jakarta Sans via Google Fonts
+
+Backend:
+  - Node.js + Express 4.19.2
+  - Mongoose 8.5.3 + MongoDB (local 127.0.0.1:27017/sympohub, Atlas, or memory)
+  - mongodb-memory-server 11.3.0 (zero-install dev DB with MONGO_URI=memory)
+  - bcryptjs 2.4.3 (password hashing, 10 rounds)
+  - jsonwebtoken 9.0.2 (7-day JWT, payload { id })
+  - express-validator 7.1.0 (query/param/body validation)
+  - cors 2.8.5 (whitelist FRONTEND_URL + localhost in dev, credentials:true)
+  - morgan 1.10.0 (dev request logging)
+  - dotenv 16.4.5 (env config)
+  - nodemon 3.1.4 (dev auto-reload)
+
+Database: MongoDB with 4 collections: events, students, registrations,
+certificates.
+
+
+3. USER ROLES & WORKFLOWS
+--------------------------------------------------------------------------------
+Role: Student (single role, no admin panel in v1.0.0)
+
+  1. Visitor (unauthenticated):
+     Home -> Browse Featured + Upcoming + Categories -> Search ->
+     Explore with filters -> Event Details -> Click Register -> Redirect to
+     /login?redirect=/events/:id -> Login/Register -> Auto-redirect back ->
+     Register -> Toast "Successfully registered!"
+
+  2. Registered Student:
+     Login (JWT saved as sympohub_token + sympohub_user in localStorage) ->
+     Navbar shows avatar dropdown (Profile, My Events, Logout) ->
+     My Events: view registrations, View Details, Cancel (modal confirm) ->
+     Certificates section: View Certificate (modal with award design) ->
+     Profile: view details, stats (Registered/Participated/Upcoming/
+     Certificates), Edit Profile (modal), Logout
+
+Sample Account (auto-seeded):
+  Email: priya.sharma@college.edu
+  Password: Priya@123
+  Name: Priya Sharma, Anna University, Computer Science, 9876543210
+  Login page has "Autofill sample login" button.
+
+
+4. FRONTEND - ROUTES / PAGES
+--------------------------------------------------------------------------------
+Defined in frontend/src/App.jsx with BrowserRouter + AnimatePresence +
+ScrollToTop + PageShell (fade/slide transition):
+
+  /               - Home.jsx
+  /explore        - ExploreEvents.jsx (query params: ?q= & ?category=)
+  /events/:id     - EventDetails.jsx
+  /my-events      - MyEvents.jsx (auth required, else -> /login?redirect=)
+  /profile        - Profile.jsx (auth required)
+  /login          - Login.jsx (?redirect= supported)
+  /register       - Register.jsx
+  *               - 404 page with "Go Home" button
+
+  4.1 Home.jsx
+    - Hero: gradient card, badge "College events, all in one place",
+      headline, CTA Explore Events + Create Account, stats (Live Events,
+      25K+ Students, 80+ Colleges), trending visual card with Unsplash image
+    - Floating SearchBar overlapping hero -> navigates to /explore?q=
+    - Browse by category: 7 CategoryCards with live counts (computed from
+      up to 100 events client-side)
+    - Featured events: eventsApi.getFeatured({limit:4}) -> type=featured
+    - Upcoming events: eventsApi.getAll({limit:8, sort:upcoming})
+    - LoadingSkeleton, EmptyState with Retry, responsive 1/2/3/4 grid
+
+  4.2 ExploreEvents.jsx
+    - SearchBar (client filter on title/name/college/category/venue/desc)
+    - FilterPanel: category chips (All + 7), Date dropdown (All/Upcoming/
+      Past/Today/ThisWeek/ThisMonth), College dropdown (derived from
+      results), Type dropdown (All/Featured/Upcoming/Past -> mapped to
+      ?type=featured/upcoming/past), Sort (upcoming/recent/popular)
+    - Server fetch: GET /events?category=&type=&limit=100, refetch on
+      category/type change; college/date/sort/search filtered client-side
+    - Pagination: PAGE_SIZE=8 with "Load more (N remaining)"
+    - URL sync: ?q= and ?category= via useSearchParams
+    - Count text "Showing X of Y events", EmptyState + Clear filters
+
+  4.3 EventDetails.jsx
+    - GET /events/:id, normalize data.event || data.data || data
+    - Hero banner image with fallback Unsplash, category badge, title,
+      college, date + venue overlay, Share button (copies URL to clipboard)
+    - About, Rules & Guidelines list (BadgeCheck icons), Event information
+      grid (Date/Time/Venue/Organizer/Deadline/Participant Limit/Registered)
+    - Sticky Registration card: seats left badge, progress bar
+      (registered/limit %), count text, Register Now button, login hint
+    - Registration: if !auth -> /login?redirect=/events/:id; else POST
+      /registrations {eventId}; handles "already registered" as success
+    - Registration check: registrationsApi.check(id) -> getMine scan
+    - Toast (fixed bottom-right) + inline message, auto-dismiss 3.5s
+
+  4.4 MyEvents.jsx
+    - Guard: if !auth -> /login?redirect=/my-events
+    - Parallel load: registrationsApi.getMine() + certificatesApi.getMine()
+      with Promise.allSettled
+    - Status derivation: getEventStatus(date, raw) -> Completed if >1 day
+      past, Upcoming if >1 day future, else raw/Registered
+    - Registration cards: title, status pill, date, venue, registered-on,
+      View Details + Cancel (red) buttons
+    - Cancel flow: Modal confirm -> DELETE /registrations/:id -> remove
+      from state
+    - Certificates grid: Award icon, title, type + status pills, issued
+      date, View Certificate -> Modal with dashed-border certificate design
+      (Certificate of Participation, student name, ID, issued date, image)
+
+  4.5 Profile.jsx
+    - Guard -> /login?redirect=/profile
+    - Header card: gradient banner, avatar initial, name, email, Edit
+      Profile + Logout buttons
+    - Info rows: Email, Phone, College, Department with icons
+    - Stats cards: Events Registered, Participated (status Completed),
+      Upcoming (future date), Certificates (count)
+    - Edit modal: name/phone/college/department, 10-digit phone validation,
+      calls AuthContext.update() -> PUT /students/:id (with optimistic
+      fallback)
+    - Logout -> /
+
+  4.6 Login.jsx
+    - Fields: email, password with icons, inline validation (required +
+      email regex), server error box
+    - Calls AuthContext.login(email,password) -> POST /students/login
+    - Success -> navigate(redirect || /my-events)
+    - Sample account box with autofill button
+    - Link to /register
+
+  4.7 Register.jsx
+    - Fields: Full Name, Email, Phone, College, Department, Password,
+      Confirm Password (7 inputs, 2-col grid on sm+)
+    - Validation: all required, email regex, 10-digit phone, password
+      min 6, confirm match
+    - Calls AuthContext.register({name,fullName,email,phone,college,
+      department,password}) -> POST /students/register
+    - Duplicate email -> "An account with this email already exists.
+      Please log in instead."
+    - Success -> navigate /
+
+
+5. FRONTEND - COMPONENTS & UTILITIES
+--------------------------------------------------------------------------------
+  Navbar.jsx:
+    Sticky floating glass nav (top-3, max-w-7xl, rounded-2xl). Logo
+    GraduationCap + SympoHub. Desktop links: Home, Explore, My Events +
+    Profile (auth only). Auth buttons: Log in + Create Account, or avatar
+    dropdown (initial, displayName, Profile/My Events/Logout). Mobile
+    hamburger with animated expand. Logout -> /.
+  Footer.jsx:
+    Brand + tagline, links Home/Explore/My Events/Profile/Login/Register,
+    (c) 2026 SympoHub.
+  EventCard.jsx + formatDate():
+    Image (fallback Unsplash), category pill, Featured badge, title,
+    college, date + venue, registered/limit + % full + progress bar,
+    Register button (stopPropagation + navigate). formatDate -> en-IN
+    "15 Oct 2026" or TBA. Motion fade-up with index stagger.
+  CategoryCard.jsx:
+    Icon map: Symposium=Sparkles, Workshop=Wrench, Hackathon=Code2,
+    Paper=FileText, Expo=Lightbulb, Cultural=Music, Sports=Trophy,
+    fallback LayoutGrid. Button card with icon, name, "N events".
+  SearchBar.jsx:
+    Glass form with Search icon, input, clear X, Search submit button.
+  FilterPanel.jsx:
+    Glass panel, Filters header + Reset, category chips, 4 selects
+    (Date/College/Type/Sort).
+  Button.jsx:
+    variant primary/secondary -> .btn-primary/.btn-secondary, loading
+    spinner (Loader2 animate-spin), disabled handling.
+  Modal.jsx:
+    AnimatePresence overlay (brand-text/40 + blur), glass-strong dialog,
+    title + X, Escape to close, click-outside to close, width prop,
+    max-h 90vh scroll.
+  LoadingSkeleton.jsx:
+    Skeleton cards (image shimmer + lines + button) + Spinner (Loader2).
+  EmptyState.jsx:
+    Centered icon, title, subtitle, optional action.
+  AuthContext.jsx:
+    localStorage keys sympohub_user/sympohub_token. extractAuth handles
+    {user,token}|{data:{user,token}}|{student}|user-direct shapes.
+    Boot: if token, try authApi.getMe() to refresh user. login/register/
+    logout/update + isAuthenticated=Boolean(user) + loading + authError.
+  lib/api.js:
+    baseURL = VITE_API_URL || http://localhost:5000/api, 15s timeout,
+    request interceptor adds Bearer token, response interceptor clears
+    stale creds on 401 (except login/register). getErrorMessage prefers
+    response.data.message. authApi (login/register/getMe via GET
+    /students/:id/updateProfile via PUT /students/:id), eventsApi
+    (getAll/getById/getFeatured via ?type=featured/getCategories with
+    fallback counting), registrationsApi (register POST /registrations,
+    getMine via /registrations/student/:id, check via scan, cancel
+    DELETE), certificatesApi (getMine via /certificates/student/:id).
+  index.css + tailwind.config.js:
+    Brand palette: primary #2563EB, dark #1E3A8A, light #EFF6FF,
+    bg #F8FAFC, text #0F172A, secondary #64748B, border #E2E8F0.
+    Utilities: .glass/.glass-strong, .btn-primary (blue, lift+shadow)/
+    .btn-secondary (white border), .input-field, .card/.card-hover,
+    .chip/.chip-active, .section-title/.section-subtitle, skeleton
+    shimmer, fadeIn/slideUp, clamp-1/2, slim scrollbar.
+
+
+6. BACKEND - SERVER & CONFIG
+--------------------------------------------------------------------------------
+  server.js:
+    dotenv, express, cors, morgan, connectDB, errorHandler.
+    FRONTEND_URL split by comma (default http://localhost:5173). CORS:
+    allow no-origin, whitelist match, any http://localhost:* in
+    non-production, else "Not allowed by CORS". credentials:true.
+    express.json(), morgan dev.
+    GET / -> {message: SympoHub API running}
+    GET /api/health -> {status: ok}
+    Mount: /api/students, /api/events, /api/registrations,
+    /api/certificates. 404 JSON + errorHandler.
+    start(): await connectDB(), then AUTO_SEED (unless AUTO_SEED=false):
+    if Event.count==0 -> insert seed events + create Priya sample student
+    (bcrypt Priya@123), then listen PORT (default 5000).
+  config/db.js:
+    MONGO_URI || mongodb://127.0.0.1:27017/sympohub. If "memory" ->
+    MongoMemoryServer in-memory. Else mongoose.connect with 5s
+    serverSelectionTimeout, pool 2-20. On fail: log tip (install local /
+    Atlas / memory) + exit 1.
+  middleware/auth.js:
+    Reads Authorization Bearer, 401 if missing, 500 if JWT_SECRET unset,
+    jwt.verify -> req.studentId + req.student, 401 if invalid/expired.
+  middleware/errorHandler.js:
+    Logs stack, status = err.statusCode||status||500, JSON {message}
+    (+ stack in development).
+
+
+7. BACKEND - DATA MODELS
+--------------------------------------------------------------------------------
+  Event (models/Event.js):
+    title:String required, category:String required enum[Symposium,
+    Workshop, Hackathon, Paper Presentation, Project Expo, Cultural,
+    Sports], description required, college required, organizer required,
+    date:Date required, time:String required, venue required,
+    rules:[String] default [], participantLimit:Number required min1,
+    registeredCount:Number default 0 min0, image:String default '',
+    featured:Boolean default false, createdAt default now.
+    Indexes: text(title,description,college), category, date, createdAt-1,
+    registeredCount-1, (featured,date), (category,date).
+    Virtuals enabled. Computed (not stored): spotsLeft = limit-count,
+    isFull = spotsLeft<=0 (added in withComputed).
+  Student (models/Student.js):
+    name required, email required unique lowercase trim regex /^\S+@\S+\.\S+$/,
+    phone required, college required, department required,
+    passwordHash required, createdAt. No passwordHash in public responses.
+  Registration (models/Registration.js):
+    studentId ObjectId->Student required, eventId ObjectId->Event
+    required, registrationDate default now, status enum[Registered,
+    Upcoming, Completed] default Registered. Unique (studentId,eventId).
+  Certificate (models/Certificate.js):
+    studentId->Student, eventId->Event, certificateType default
+    Participation, certificateUrl default '', issuedDate default now.
+    Unique (studentId,eventId).
+
+
+8. BACKEND - API REFERENCE
+--------------------------------------------------------------------------------
+Base URL: http://localhost:5000/api (frontend VITE_API_URL)
+
+  Students (/api/students):
+    POST /register
+      Body: {name, email, phone(10 digits), college, department|dept,
+      password(min6)} -> 201 {student:{id,name,email,phone,college,
+      department,createdAt}, token(7d)} | 400 validation | 409 email exists
+    POST /login
+      Body: {email,password} -> 200 {student,token} | 401 invalid
+    GET /:id
+      Param MongoId -> 200 {student(-passwordHash)} | 404
+    PUT /:id (Auth: Bearer, self only)
+      Body opt {name,phone,college,department|dept} -> 200 {student} |
+      403 forbidden | 404
+
+  Events (/api/events):
+    GET /?search=&category=&college=&type=featured/upcoming/past/all&
+        sort=upcoming|recent|popular&page=&limit=
+      search regex on title/desc/college/organizer; category case-
+      insensitive exact (All=no filter); college regex; type featured->
+      featured true, upcoming date>=now, past date<now; sort upcoming
+      date asc / recent createdAt desc / popular registeredCount desc.
+      -> 200 {events(with spotsLeft,isFull), total, page, pages}
+      Default sort upcoming, page1, limit12. Validation 400.
+    GET /search?q= (q required) -> {events (max50 date asc), total}
+    GET /category/:category (case-insensitive) -> {events max50, total}
+    GET /categories -> {categories:[{name,count}]} (60s in-memory cache)
+    POST /:id/register (Auth)
+      Atomic findOneAndUpdate {_id, registeredCount<limit} $inc+1 ->
+      create Registration(status Upcoming if future else Registered) ->
+      rollback -1 on duplicate -> 201 {registration} | 404 no event |
+      400 full | 409 already registered
+    GET /:id -> 200 {event(withComputed)} | 404 | 400 invalid id
+
+  Registrations (/api/registrations):
+    POST / (optionalAuth: Bearer if present; else studentId in body)
+      Body {eventId, studentId?} -> if token+body mismatch 403; if no id
+      401. Atomic seat reserve, status Upcoming/Registered by date,
+      populate eventId -> 201 {registration} | 404 | 400 full |
+      409 duplicate
+    GET /student/:studentId (optionalAuth, ownership if token)
+      -> populate eventId sort registrationDate desc, bulk auto-mark
+      Completed if event past -> 200 {registrations,total} | 403
+    GET /:id -> populate eventId + studentId(-passwordHash) ->
+      200 {registration} | 404
+    DELETE /:id (Auth, owner only) -> delete + $inc -1 + clamp >=0 ->
+      200 {message: Registration cancelled.} | 403 | 404
+
+  Certificates (/api/certificates):
+    GET /student/:studentId (optionalAuth, ownership if token)
+      Find Completed registrations -> missing Certificates auto-created
+      (Participation, url https://sympohub.io/certificates/{s}-{e}.pdf)
+      insertMany ordered false ignore 11000 -> populate eventId sort
+      issuedDate desc -> 200 {certificates,total} | 403
+
+  System:
+    GET / -> {message: SympoHub API running}
+    GET /api/health -> {status: ok}
+    * -> 404 {message: Route not found}
+    Errors -> JSON {message} (+stack in development)
+
+  Auth Header: Authorization: Bearer <JWT>
+  Token: jwt.sign({id}, JWT_SECRET, {expiresIn:7d})
+
+
+9. SEED DATA
+--------------------------------------------------------------------------------
+File backend/src/seed/seed.js exports {seed, events}. 14 events (2 per
+category) with Unsplash images per category, realistic Indian colleges,
+dates Oct 2026 - Mar 2027, limits 80-800:
+
+  Symposium: TechNova National Symposium 2026 (Anna Univ, 500, featured,
+  2026-10-15), ElectroVision Tech Symposium (PSG Tech, 300, 2026-11-05)
+  Workshop: Full-Stack Bootcamp (SSN, 120, featured, 2026-10-22), AI/ML
+  Workshop (VIT Chennai, 100, 2026-11-12)
+  Hackathon: HackNight 36h (SRM, 200, featured, 2026-12-04), CodeSprint
+  (NIT Trichy, 150, 2027-01-09)
+  Paper: InnovatePaper (Anna Univ, 80, 2026-10-28), Research Frontiers
+  (PSG Tech, 90, 2027-02-11)
+  Expo: BuildExpo (VIT Chennai, 250, featured, 2026-11-20), MakerFest
+  (SSN, 180, 2027-01-21)
+  Cultural: RhythmFest (Loyola, 800, featured, 2026-12-18), ArtBeat
+  (SRM, 600, 2027-02-26)
+  Sports: Champions Trophy (NIT Trichy, 400, 2027-03-05), Premier League
+  Football (Loyola, 320, 2027-03-12)
+
+Each has description + deadlineNote (date-3 days), organizer, time,
+venue, 4-5 rules.
+
+Sample student: Priya Sharma <priya.sharma@college.edu> / Priya@123.
+
+Seed behaviors:
+  - Server auto-seeds if Event.count==0 and AUTO_SEED!=false
+  - Manual: npm run seed (node src/seed/seed.js) clears Events, inserts
+    14, creates sample student if missing.
+
+
+10. ENVIRONMENT & SETUP
+--------------------------------------------------------------------------------
+  backend/.env.example:
+    PORT=5000
+    MONGO_URI=mongodb://127.0.0.1:27017/sympohub
+    JWT_SECRET=sympohub_secret_change_me
+    FRONTEND_URL=http://localhost:5173
+  frontend/.env.example:
+    VITE_API_URL=http://localhost:5000/api
+
+  Backend .env options:
+    MONGO_URI=memory -> in-memory MongoDB (zero-install, non-persistent)
+    AUTO_SEED=false -> disable auto-seed
+    NODE_ENV=production -> strict CORS (whitelist only)
+    JWT_SECRET (required for login/register)
+
+  Install & Run (Windows PowerShell):
+    # Backend
+    cd backend
+    npm install
+    copy .env.example .env   # edit JWT_SECRET, MONGO_URI as needed
+    npm run seed             # optional manual seed
+    npm run dev              # nodemon src/server.js (dev)
+    npm start                # node src/server.js (prod)
+    # Backend runs on http://localhost:5000, health at /api/health
+
+    # Frontend (new terminal)
+    cd frontend
+    npm install
+    copy .env.example .env   # set VITE_API_URL=http://localhost:5000/api
+    npm run dev              # Vite at http://localhost:5173
+    npm run build            # production build to dist/
+    npm run preview          # preview build
+
+  Prerequisites: Node.js 18+, npm, MongoDB local OR Atlas URI OR
+  MONGO_URI=memory. Ports 5000 (API) and 5173 (Vite) free.
+
+  Verification:
+    - Backend log shows "MongoDB connected" + "SympoHub backend
+      listening on port 5000" (+ "Auto-seeded 14 events" on first run)
+    - GET http://localhost:5000/api/health -> {"status":"ok"}
+    - GET http://localhost:5000/api/events?limit=2 -> events list
+    - Frontend http://localhost:5173 shows hero + featured + upcoming
+    - Login with Priya@123 works, registration + cancel + profile edit
+
+
+11. DESIGN SYSTEM
+--------------------------------------------------------------------------------
+  Colors: blue primary #2563EB, dark #1E3A8A, light #EFF6FF, bg #F8FAFC.
+  Typography: Inter body, Plus Jakarta Sans display, extrabold headings.
+  Surfaces: glass (75% white, 16px blur, soft blue shadow) for navbar/
+  search/filters/register card; glass-strong (90%) for auth cards/modals.
+  Buttons: .btn-primary blue pill with lift+shadow on hover; .btn-secondary
+  white border -> blue on hover. Chips: pill filters, active = blue fill.
+  Cards: rounded-2xl white + border + card shadow, hover lift.
+  Motion: page fade/slide 0.3s, cards stagger by index, navbar slide-down,
+  modal scale/fade, hero blobs (blur-3xl blue circles).
+  Responsive: 1 col mobile -> 2 sm -> 3 lg -> 4 xl for event grids;
+  mobile hamburger menu; sticky register card on lg (top-24).
+
+
+12. SECURITY & VALIDATION
+--------------------------------------------------------------------------------
+  - Passwords bcrypt-hashed (10 rounds), never returned (select
+    -passwordHash, publicStudent helper).
+  - JWT 7-day expiry, Bearer header, server 500 if JWT_SECRET missing.
+  - express-validator on all inputs: email format+normalize, 10-digit
+    phone, password min6, MongoId params, int page/limit, enum type/sort.
+  - Ownership checks: PUT /students/:id self-only, DELETE registrations
+    owner-only, GET student regs/certs enforce match when token present,
+    POST registrations rejects token/body mismatch.
+  - Duplicate guards: unique email, unique (student,event) registration
+    + certificate, atomic $inc seat reserve with rollback on duplicate,
+    oversell prevented via $expr registeredCount<limit.
+  - CORS whitelist + credentials, 401 cleanup on frontend, XSS escape via
+    .escape() on search/category/college params, centralized JSON errors.
+
+
+13. KNOWN LIMITATIONS & FUTURE SCOPE
+--------------------------------------------------------------------------------
+  Current (v1.0.0):
+    - Single Student role, no organizer/admin event creation UI (events
+      via seed/DB directly).
+    - Certificates are placeholder records with synthetic PDF URLs
+      (https://sympohub.io/...), no real PDF generation or download.
+    - No email/OTP, password reset, social login, or notifications.
+    - No payment for paid events, no team management, no QR check-in.
+    - Category counts cached 60s server-side; home counts client-side.
+    - No automated tests or linter (lint script echoes placeholder).
+
+  Suggested Next:
+    Admin/organizer dashboard (CRUD events, view registrations, issue
+    certificates), real PDF certificates + download, email notifications,
+    forgot-password, event image upload, payments (Razorpay/Stripe),
+    team registrations, attendance QR, ratings/reviews, bookmarks,
+    pagination server-side for Explore, unit/integration tests (Jest/
+    Supertest), CI/CD + Docker + Atlas + Vercel/Render deploy.
+
+
+14. QUICK REFERENCE
+--------------------------------------------------------------------------------
+  Ports: API 5000, Web 5173
+  Health: GET /api/health
+  Sample login: priya.sharma@college.edu / Priya@123
+  Seed: npm run seed (backend)
+  Env keys: PORT, MONGO_URI (or memory), JWT_SECRET, FRONTEND_URL,
+  VITE_API_URL, AUTO_SEED, NODE_ENV
+  LocalStorage: sympohub_token, sympohub_user
+  Categories: Symposium, Workshop, Hackathon, Paper Presentation,
+  Project Expo, Cultural, Sports
+  Registration statuses: Registered, Upcoming, Completed
+  Certificate type: Participation (default)
+
+================================================================================
+ End of SympoHub Documentation. Generated 2026-09-27 from full codebase read
+ (backend src + frontend src + configs + seed).
+================================================================================
